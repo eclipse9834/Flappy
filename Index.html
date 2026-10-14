@@ -2,43 +2,69 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Flappy Bird Minimal AI</title>
+<title>Flappy Bird Minimal AI - Compacto</title>
 <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col items-center justify-center p-2 select-none">
-<h1 class="text-sm font-bold mb-1">Flappy Bird • IA Compacta</h1>
+<h1 class="text-sm font-bold mb-1">Flappy Bird • IA Compacta & Otimizada</h1>
 <div class="relative bg-slate-900 p-2 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-xs sm:max-w-sm">
 <canvas id="c" width="360" height="520" class="w-full h-auto rounded-xl bg-sky-300 block"></canvas>
 <div class="absolute top-4 left-4 right-4 flex justify-between px-2.5 py-1 bg-slate-900/80 backdrop-blur rounded-lg text-xs font-semibold border border-slate-700/50">
 <span>G: <strong id="g" class="text-cyan-400">1</strong></span>
-<span>Vivos: <strong id="v" class="text-emerald-400">15</strong></span>
+<span>Vivos: <strong id="v" class="text-emerald-400">50</strong></span>
 <span>Rec: <strong id="r" class="text-amber-400">0</strong></span>
 </div></div>
 <script>
-const c=document.getElementById('c'),ctx=c.getContext('2d'),POP=15;
+const c=document.getElementById('c'),ctx=c.getContext('2d'),POP=50;
 let gen=1,rec=0,birds=[],pipes=[],frame=0,pw=50,gap=150;
 class NN {
-constructor(){this.w1=[[Math.random()*2-1,Math.random()*2-1],[Math.random()*2-1,Math.random()*2-1]];this.b1=[Math.random()*2-1,Math.random()*2-1];this.w2=[Math.random()*2-1,Math.random()*2-1];this.b2=Math.random()*2-1;}
-predict(i1,i2){let h1=1/(1+Math.exp(-(i1*this.w1[0][0]+i2*this.w1[1][0]+this.b1[0]))),h2=1/(1+Math.exp(-(i1*this.w1[0][1]+i2*this.w1[1][1]+this.b1[1])));return 1/(1+Math.exp(-(h1*this.w2[0]+h2*this.w2[1]+this.b2)));}
-copy(){let n=new NN();n.w1=this.w1.map(r=>[...r]);n.b1=[...this.b1];n.w2=[...this.w2];n.b2=this.b2;return n;}
-mutate(r){const m=v=>Math.random()<r?v+(Math.random()*0.8-0.4):v;this.w1=this.w1.map(ro=>ro.map(m));this.b1=this.b1.map(m);this.w2=this.w2.map(m);this.b2=m(this.b2);}
+  constructor(){
+    this.w1=Array(2).fill(0).map(()=>Array(4).fill(0).map(()=>Math.random()*2-1));
+    this.b1=Array(4).fill(0).map(()=>Math.random()*2-1);
+    this.w2=Array(4).fill(0).map(()=>Math.random()*2-1);
+    this.b2=Math.random()*2-1;
+  }
+  predict(i1,i2){
+    let h=this.b1.map((b,j)=>1/(1+Math.exp(-(i1*this.w1[0][j]+i2*this.w1[1][j]+b))));
+    let out=h.reduce((acc,val,j)=>acc+val*this.w2[j],this.b2);
+    return 1/(1+Math.exp(-out));
+  }
+  copy(){let n=new NN();n.w1=this.w1.map(r=>[...r]);n.b1=[...this.b1];n.w2=[...this.w2];n.b2=this.b2;return n;}
+  mutate(r){const m=v=>Math.random()<r?v+(Math.random()*0.8-0.4):v;this.w1=this.w1.map(ro=>ro.map(m));this.b1=this.b1.map(m);this.w2=this.w2.map(m);this.b2=m(this.b2);}
 }
 class Bird {
-constructor(brain){this.y=260;this.x=60;this.grav=0.55;this.lift=-8.5;this.vel=0;this.rad=12;this.score=0;this.fit=0;this.alive=true;this.brain=brain||new NN();this.color=`hsl(${Math.random()*360},85%,60%)`;}
-update(){if(!this.alive)return;let p=pipes.find(x=>x.x+pw>this.x)||pipes[0];if(p&&this.brain.predict((this.y-(p.top+gap/2))/260,this.vel/12)>0.5)this.vel=this.lift;this.vel+=this.grav;this.y+=this.vel;this.fit++;if(this.y-this.rad<=0||this.y+this.rad>=490)this.alive=false;pipes.forEach(p=>{if(this.x+this.rad>p.x&&this.x-this.rad<p.x+pw&&(this.y-this.rad<p.top||this.y+this.rad>520-p.bottom))this.alive=false;});}
-draw(){if(!this.alive)return;ctx.fillStyle=this.color;ctx.beginPath();ctx.arc(this.x,this.y,this.rad,0,Math.PI*2);ctx.fill();}
+  constructor(brain){
+    this.y=260;this.x=60;this.grav=0.55;this.lift=-8.5;this.vel=0;this.rad=12;this.score=0;this.fit=0;this.alive=true;
+    this.brain=brain||new NN();this.color=`hsl(${Math.random()*360},85%,60%)`;
+  }
+  update(){
+    if(!this.alive)return;
+    let p=pipes.find(x=>x.x+pw>this.x)||pipes[0];
+    if(p&&this.brain.predict((p.x-this.x)/360,(this.y-(p.top+gap/2))/260)>0.5)this.vel=this.lift;
+    this.vel+=this.grav;this.y+=this.vel;this.fit++;
+    if(this.y-this.rad<=0||this.y+this.rad>=490)this.alive=false;
+    pipes.forEach(p=>{if(this.x+this.rad>p.x&&this.x-this.rad<p.x+pw&&(this.y-this.rad<p.top||this.y+this.rad>520-p.bottom))this.alive=false;});
+  }
+  draw(){if(!this.alive)return;ctx.fillStyle=this.color;ctx.beginPath();ctx.arc(this.x,this.y,this.rad,0,Math.PI*2);ctx.fill();}
 }
 function reset(){pipes=[];frame=0;let top=Math.random()*220+40;pipes.push({x:360,top,bottom:520-top-gap,passed:false});}
-function nextGen(){birds.sort((a,b)=>b.fit-a.fit);if(birds[0].score>rec)rec=birds[0].score;let nB=[new Bird(birds[0].brain.copy())];while(nB.length<POP){let p=birds[Math.floor(Math.random()*5)].brain.copy();p.mutate(0.2);nB.push(new Bird(p));}birds=nB;gen++;reset();}
-function loop(){frame++;if(frame%95===0){let top=Math.random()*220+40;pipes.push({x:360,top,bottom:520-top-gap,passed:false});}
-pipes.forEach((p,i)=>{p.x-=2.5;birds.forEach(b=>{if(b.alive&&!p.passed&&p.x+pw<b.x){p.passed=true;b.score++;b.fit+=2000;}});if(p.x+pw<0)pipes.splice(i,1);});
-let alive=0;birds.forEach(b=>{b.update();if(b.alive)alive++;});
-document.getElementById('g').innerText=gen;document.getElementById('v').innerText=`${alive}/${POP}`;document.getElementById('r').innerText=rec;
-if(alive===0)nextGen();
-ctx.fillStyle='#7ec0ee';ctx.fillRect(0,0,360,520);
-pipes.forEach(p=>{ctx.fillStyle='#22c55e';ctx.fillRect(p.x,0,pw,p.top);ctx.fillRect(p.x,520-p.bottom,pw,p.bottom);});
-ctx.fillStyle='#deb887';ctx.fillRect(0,490,360,30);
-birds.forEach(b=>b.draw());requestAnimationFrame(loop);}
+function nextGen(){
+  birds.sort((a,b)=>b.fit-a.fit);if(birds[0].score>rec)rec=birds[0].score;
+  let nB=[new Bird(birds[0].brain.copy()),new Bird(birds[1].brain.copy())];
+  while(nB.length<POP){let p=birds[Math.floor(Math.random()*10)].brain.copy();p.mutate(0.25);nB.push(new Bird(p));}
+  birds=nB;gen++;reset();
+}
+function loop(){
+  frame++;if(frame%95===0){let top=Math.random()*220+40;pipes.push({x:360,top,bottom:520-top-gap,passed:false});}
+  pipes.forEach((p,i)=>{p.x-=2.5;birds.forEach(b=>{if(b.alive&&!p.passed&&p.x+pw<b.x){p.passed=true;b.score++;b.fit+=5000;}});if(p.x+pw<0)pipes.splice(i,1);});
+  let alive=0;birds.forEach(b=>{b.update();if(b.alive)alive++;});
+  document.getElementById('g').innerText=gen;document.getElementById('v').innerText=`${alive}/${POP}`;document.getElementById('r').innerText=rec;
+  if(alive===0)nextGen();
+  ctx.fillStyle='#7ec0ee';ctx.fillRect(0,0,360,520);
+  pipes.forEach(p=>{ctx.fillStyle='#22c55e';ctx.fillRect(p.x,0,pw,p.top);ctx.fillRect(p.x,520-p.bottom,pw,p.bottom);});
+  ctx.fillStyle='#deb887';ctx.fillRect(0,490,360,30);
+  birds.forEach(b=>b.draw());requestAnimationFrame(loop);
+}
 birds=Array.from({length:POP},()=>new Bird());reset();loop();
 </script>
 </body>
