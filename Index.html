@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird Minimal AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>body { background: #090d16; font-family: system-ui, sans-serif; }</style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col items-center justify-center p-4">
+    <div class="text-center mb-3">
+        <h1 class="text-lg font-bold text-slate-200">Flappy Bird • IA Compacta</h1>
+        <p class="text-xs text-slate-400">15 Passarinhos • 5 Neurônios • Fitness Otimizado</p>
+    </div>
+    <div class="relative bg-slate-900 p-2 rounded-2xl shadow-2xl border border-slate-800">
+        <canvas id="gameCanvas" width="360" height="520" class="rounded-xl bg-sky-300 block"></canvas>
+        <div class="absolute top-4 left-4 right-4 flex justify-between px-3 py-1.5 bg-slate-900/80 backdrop-blur-md rounded-xl text-xs font-semibold border border-slate-700/50">
+            <span>Geração: <strong id="genLabel" class="text-cyan-400">1</strong></span>
+            <span>Vivos: <strong id="aliveLabel" class="text-emerald-400">15/15</strong></span>
+            <span>Recorde: <strong id="recordLabel" class="text-amber-400">0</strong></span>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const POPULATION_SIZE = 15;
+        let generation = 1, maxScoreRecord = 0, birds = [], pipes = [], frameCount = 0;
+        const pipeWidth = 50, pipeGap = 150;
+
+        class NeuralNetwork {
+            constructor() {
+                this.weightsI_H = [[Math.random()*2-1, Math.random()*2-1], [Math.random()*2-1, Math.random()*2-1]];
+                this.biasH = [Math.random()*2-1, Math.random()*2-1];
+                this.weightsH_O = [Math.random()*2-1, Math.random()*2-1];
+                this.biasO = Math.random()*2-1;
+            }
+            predict(i1, i2) {
+                let h1 = 1 / (1 + Math.exp(-(i1 * this.weightsI_H[0][0] + i2 * this.weightsI_H[1][0] + this.biasH[0])));
+                let h2 = 1 / (1 + Math.exp(-(i1 * this.weightsI_H[0][1] + i2 * this.weightsI_H[1][1] + this.biasH[1])));
+                return 1 / (1 + Math.exp(-(h1 * this.weightsH_O[0] + h2 * this.weightsH_O[1] + this.biasO)));
+            }
+            copy() {
+                let nn = new NeuralNetwork();
+                nn.weightsI_H = this.weightsI_H.map(r => [...r]);
+                nn.biasH = [...this.biasH];
+                nn.weightsH_O = [...this.weightsH_O];
+                nn.biasO = this.biasO;
+                return nn;
+            }
+            mutate(rate) {
+                const m = v => Math.random() < rate ? v + (Math.random() * 0.8 - 0.4) : v;
+                this.weightsI_H[0][0] = m(this.weightsI_H[0][0]);
+                this.weightsI_H[0][1] = m(this.weightsI_H[0][1]);
+                this.weightsI_H[1][0] = m(this.weightsI_H[1][0]);
+                this.weightsI_H[1][1] = m(this.weightsI_H[1][1]);
+                this.biasH[0] = m(this.biasH[0]);
+                this.biasH[1] = m(this.biasH[1]);
+                this.weightsH_O[0] = m(this.weightsH_O[0]);
+                this.weightsH_O[1] = m(this.weightsH_O[1]);
+                this.biasO = m(this.biasO);
+            }
+        }
+
+        class Bird {
+            constructor(brain) {
+                this.y = canvas.height / 2;
+                this.x = 60;
+                this.gravity = 0.55;
+                this.lift = -8.5;
+                this.velocity = 0;
+                this.radius = 12;
+                this.score = 0;
+                this.fitness = 0;
+                this.alive = true;
+                this.brain = brain || new NeuralNetwork();
+                this.color = `hsl(${Math.random() * 360}, 85%, 60%)`;
+            }
+            update() {
+                if (!this.alive) return;
+                let p = pipes.find(x => x.x + pipeWidth > this.x) || pipes[0];
+                if (p) {
+                    let i1 = (this.y - (p.top + pipeGap / 2)) / (canvas.height / 2);
+                    let i2 = this.velocity / 12;
+                    if (this.brain.predict(i1, i2) > 0.5) this.velocity = this.lift;
+                }
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+                this.fitness += 1;
+                if (this.y - this.radius <= 0 || this.y + this.radius >= canvas.height - 30) this.alive = false;
+                for (let pipe of pipes) {
+                    if (this.x + this.radius > pipe.x && this.x - this.radius < pipe.x + pipeWidth && (this.y - this.radius < pipe.top || this.y + this.radius > canvas.height - pipe.bottom)) {
+                        this.alive = false;
+                    }
+                }
+            }
+            draw() {
+                if (!this.alive) return;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#1e293b';
+                ctx.stroke();
+            }
+        }
+
+        function initPopulation() {
+            birds = [];
+            for (let i = 0; i < POPULATION_SIZE; i++) birds.push(new Bird());
+        }
+        function resetGame() { pipes = []; frameCount = 0; spawnPipe(); }
+        function spawnPipe() {
+            let minH = 50, maxH = canvas.height - pipeGap - 80;
+            let topH = Math.floor(Math.random() * (maxH - minH + 1)) + minH;
+            pipes.push({ x: canvas.width, top: topH, bottom: canvas.height - topH - pipeGap, passed: false });
+        }
+        function nextGeneration() {
+            birds.forEach(b => b.fitness += b.score * 5000);
+            birds.sort((a, b) => b.fitness - a.fitness);
+            if (birds[0].score > maxScoreRecord) maxScoreRecord = birds[0].score;
+            let newBirds = [new Bird(birds[0].brain.copy())];
+            while (newBirds.length < POPULATION_SIZE) {
+                let totalF = birds.reduce((s, b) => s + b.fitness, 0);
+                let r = Math.random() * totalF, cur = 0, parent = birds[0];
+                for (let b of birds) { cur += b.fitness; if (cur >= r) { parent = b; break; } }
+                let childBrain = parent.brain.copy();
+                childBrain.mutate(0.18);
+                newBirds.push(new Bird(childBrain));
+            }
+            birds = newBirds;
+            generation++;
+            resetGame();
+        }
+        function update() {
+            frameCount++;
+            if (frameCount % 95 === 0) spawnPipe();
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                pipes[i].x -= 2.5;
+                for (let b of birds) {
+                    if (b.alive && !pipes[i].passed && pipes[i].x + pipeWidth < b.x) {
+                        pipes[i].passed = true;
+                        b.score++;
+                        b.fitness += 2000;
+                    }
+                }
+                if (pipes[i].x + pipeWidth < 0) pipes.splice(i, 1);
+            }
+            let alive = 0;
+            for (let b of birds) { b.update(); if (b.alive) alive++; }
+            document.getElementById('genLabel').innerText = generation;
+            document.getElementById('aliveLabel').innerText = `${alive}/${POPULATION_SIZE}`;
+            document.getElementById('recordLabel').innerText = maxScoreRecord;
+            if (alive === 0) nextGeneration();
+        }
+        function draw() {
+            ctx.fillStyle = '#7ec0ee';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            for (let p of pipes) {
+                ctx.fillStyle = '#22c55e';
+                ctx.fillRect(p.x, 0, pipeWidth, p.top);
+                ctx.fillRect(p.x, canvas.height - p.bottom, pipeWidth, p.bottom);
+            }
+            ctx.fillStyle = '#deb887';
+            ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
+            ctx.fillStyle = '#558022';
+            ctx.fillRect(0, canvas.height - 30, canvas.width, 6);
+            birds.forEach(b => b.draw());
+        }
+        function loop() { update(); draw(); requestAnimationFrame(loop); }
+        initPopulation(); resetGame(); loop();
+    </script>
+</body>
+</html>
